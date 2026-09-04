@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+var/
+dist/
+*.log
+.DS_Store
+.vscode/
+.idea/
+public/vendor/
+CLAUDE.md
+.claude/

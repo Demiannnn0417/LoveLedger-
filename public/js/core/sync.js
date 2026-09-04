@@ -1,0 +1,393 @@
+// SPDX-License-Identifier: MIT
+// Offline-first state: optimistic IDB writes, queued server sync, multilingual
+// cards with per-locale `translations`.
+
+import { request, ApiError } from './api.js';
+import { idb } from './idb.js';
+import { emit, on } from './events.js';
+import { getLocale } from './i18n.js';
+
+// Mirror of server/src/routes/sync.js. The server slices history to this size
+// on every state load and remains authoritative; this client-side trim only
+// keeps the in-memory list bounded between syncs.
+const HISTORY_CAP = 500;
+const FALLBACK_LOCALE = 'en';
+
+let cards = [];
+// Map<cardId, bannedAt>; Map keeps the backend's banned_at DESC order.
+let banned = new Map();
+let history = [];
+// Locale the cached deck was actually fetched in, so a language change knows
+// whether it has to pull the deck again. Left untouched when a fetch fails and
+// the cache answers instead, which keeps the next attempt armed.
+let cardsLocale = null;
+let initialized = false;
+let flushing = false;
+
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  return [...bytes].map((b, i) => {
+    const h = b.toString(16).padStart(2, '0');
+    return (i === 4 || i === 6 || i === 8 || i === 10) ? `-${h}` : h;
+  }).join('');
+}
+
+async function loadCardsFromApiOrCache(locale) {
+  const cachedVersion = await idb.getCardsVersion();
+  try {
+    // The version the server hands back embeds the locale, so a cached ETag
+    // from another language simply misses and returns the full payload.
+    const headers = cachedVersion ? { 'if-none-match': `"${cachedVersion}"` } : {};
+    // 10 s timeout: a stalled server shouldn't block the boot skeleton forever.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    let resp;
+    try {
+      resp = await fetch(`/api/cards?locale=${encodeURIComponent(locale)}`, {
+        credentials: 'same-origin',
+        headers,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (resp.status === 304) {
+      cards = await idb.getCards();
+      cardsLocale = locale;
+      return cards;
+    }
+    if (!resp.ok) throw new ApiError('CARDS_FETCH_FAILED', resp.status);
+    const data = await resp.json();
+    cards = data.cards || [];
+    await idb.putCards(cards, data.version);
+    cardsLocale = locale;
+    return cards;
+  } catch (err) {
+    const cached = await idb.getCards();
+    if (cached.length > 0) {
+      cards = cached;
+      return cards;
+    }
+    throw err;
+  }
+}
+
+// Accept both the current [{ cardId, bannedAt }] and the legacy [cardId]
+// shape that may still live in IndexedDB after an upgrade.
+function normaliseBanned(list) {
+  const map = new Map();
+  for (const entry of list || []) {
+    if (typeof entry === 'string') map.set(entry, null);
+    else if (entry && typeof entry === 'object') map.set(entry.cardId, entry.bannedAt ?? null);
+  }
+  return map;
+}
+
+function bannedToList() {
+  return [...banned.entries()].map(([cardId, bannedAt]) => ({ cardId, bannedAt }));
+}
+
+async function loadStateFromApiOrCache() {
+  try {
+    const data = await request('/api/state');
+    banned = normaliseBanned(data.banned);
+    history = data.history;
+    await idb.setBanned(bannedToList());
+    await idb.setHistory(history);
+  } catch (err) {
+    const cached = await idb.getState();
+    banned = normaliseBanned(cached.banned);
+    history = cached.history;
+    if (err?.status && err.status !== 0) throw err;
+  }
+}
+
+// Warm the service worker's runtime cache with the deck's emoji art so a later
+// offline session renders real icons instead of broken images. The SW stores
+// each fetched SVG (cacheFirst in sw.js); already-cached ones return without a
+// network hit. Only the emojis the deck actually uses are touched. Best effort:
+// skip when offline, run when idle, never throw. Path mirrors ui/emoji.js BASE.
+function warmEmojiCache() {
+  if (!navigator.onLine) return;
+  const slugs = new Set(['house', 'city']); // pile defaults used when a card has none
+  for (const c of cards) if (c.emoji) slugs.add(c.emoji);
+  const run = () => {
+    for (const slug of slugs) {
+      fetch(`/icons/emoji/${slug}.svg`, { credentials: 'same-origin' }).catch(() => {});
+    }
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 3000 });
+  else setTimeout(run, 1500);
+}
+
+export async function initSync(locale) {
+  if (initialized) return;
+  // The deck and the per-user state come from two independent endpoints, so
+  // they load in parallel: chaining them made /api/state wait for the whole
+  // deck download on a cold start or after a deck edit.
+  await Promise.all([loadCardsFromApiOrCache(locale), loadStateFromApiOrCache()]);
+  initialized = true;
+  emit('sync:ready');
+  warmEmojiCache();
+  flushOutbox().catch(() => {});
+  window.addEventListener('online', () => { flushOutbox().catch(() => {}); });
+}
+
+// The deck holds one language, so switching the interface has to pull it
+// again. i18n:change also fires during boot with the deck still in flight,
+// which the initialized guard filters out. Views repaint on i18n:change from
+// the old deck, so `deck:changed` only fires once the new text is in memory.
+on('i18n:change', (locale) => {
+  if (!initialized || locale === cardsLocale) return;
+  loadCardsFromApiOrCache(locale)
+    .then(() => { if (cardsLocale === locale) emit('deck:changed'); })
+    .catch(() => {});
+});
+
+export function getCards() { return cards; }
+export function isBanned(cardId) { return banned.has(cardId); }
+export function getHistory() { return history.slice(); }
+
+export function getCardById(id) {
+  return cards.find((c) => c.id === id) || null;
+}
+
+// Picks a translation for `locale`, falls back to English then any available.
+// Also handles the legacy `{title, description}` shape so a stale /api/cards
+// cache from a previous version never leaves the lists blank. The returned
+// `locale` reflects what the caller actually got, which lets views tag the
+// rendered text with `lang` so screen readers switch voice on fallback.
+export function getCardText(card, locale = getLocale()) {
+  const placeholder = { title: '', description: '', locale };
+  if (!card) return placeholder;
+  if (card.translations) {
+    if (card.translations[locale]) {
+      return { ...card.translations[locale], locale };
+    }
+    if (card.translations[FALLBACK_LOCALE]) {
+      return { ...card.translations[FALLBACK_LOCALE], locale: FALLBACK_LOCALE };
+    }
+    const [effectiveLocale, t] = Object.entries(card.translations).find(([, v]) => v) || [];
+    if (t) return { ...t, locale: effectiveLocale };
+  }
+  if (card.title || card.description) {
+    return { title: card.title ?? '', description: card.description ?? '', locale };
+  }
+  return placeholder;
+}
+
+function availableCards(pile) {
+  return cards.filter((c) => c.pile === pile && !banned.has(c.id));
+}
+
+export function countsByPile() {
+  const counts = { home: 0, outdoor: 0 };
+  for (const c of cards) {
+    if (!banned.has(c.id) && counts[c.pile] !== undefined) counts[c.pile]++;
+  }
+  return counts;
+}
+
+export function totalByPile() {
+  const counts = { home: 0, outdoor: 0 };
+  for (const c of cards) {
+    if (counts[c.pile] !== undefined) counts[c.pile]++;
+  }
+  return counts;
+}
+
+// Foil cards (the "rare" variant reserved for explicitly sexual content) are
+// intentionally drawn less often than standard cards so the rarity stays
+// earned even when their share of the deck is large. Effective draw rate of
+// foils ≈ (foilCount × FOIL_WEIGHT) / (standardCount + foilCount × FOIL_WEIGHT).
+const FOIL_WEIGHT = 0.3;
+
+export function drawRandom(pile, recentIds = []) {
+  const pool = availableCards(pile);
+  if (pool.length === 0) return null;
+  const recent = new Set(recentIds);
+  const filtered = pool.filter((c) => !recent.has(c.id));
+  const finalPool = filtered.length > 0 ? filtered : pool;
+  const totalWeight = finalPool.reduce((s, c) => s + (c.foil ? FOIL_WEIGHT : 1), 0);
+  let r = Math.random() * totalWeight;
+  for (const c of finalPool) {
+    r -= c.foil ? FOIL_WEIGHT : 1;
+    if (r <= 0) return c;
+  }
+  return finalPool[finalPool.length - 1];
+}
+
+// Read-only getter so feature modules can render an offline / pending-sync
+// indicator without reaching into the outbox store directly.
+export async function pendingOutboxCount() {
+  try { return (await idb.listOutbox()).length; }
+  catch { return 0; }
+}
+
+async function notifyOutboxChanged() {
+  emit('sync:outbox-changed', { count: await pendingOutboxCount() });
+}
+
+export async function banCard(cardId) {
+  // Optimistic timestamp; server truth lands on the next state load.
+  banned.set(cardId, new Date().toISOString());
+  await idb.setBanned(bannedToList());
+  emit('state:banned-changed');
+  await idb.enqueue({ kind: 'ban', cardId });
+  notifyOutboxChanged();
+  flushOutbox().catch(() => {});
+}
+
+export async function unbanCard(cardId) {
+  banned.delete(cardId);
+  await idb.setBanned(bannedToList());
+  emit('state:banned-changed');
+  await idb.enqueue({ kind: 'unban', cardId });
+  notifyOutboxChanged();
+  flushOutbox().catch(() => {});
+}
+
+export async function addHistory(entry) {
+  const full = {
+    clientUuid: uuid(),
+    cardId: entry.cardId,
+    action: entry.action,
+    drawnAt: entry.drawnAt || new Date().toISOString(),
+  };
+  history = [full, ...history].slice(0, HISTORY_CAP);
+  await idb.setHistory(history);
+  emit('state:history-changed');
+  await idb.enqueue({ kind: 'history', entry: full });
+  notifyOutboxChanged();
+  flushOutbox().catch(() => {});
+  return full;
+}
+
+// Remove a history entry by its clientUuid. Used by the undo flows: the entry
+// must disappear locally, from any not-yet-flushed outbox item, and from the
+// server (the flush usually wins the race against the 5 s undo toast). The
+// queued delete is idempotent, so replaying it or deleting an entry that
+// never reached the server is harmless.
+export async function removeHistoryByUuid(clientUuid) {
+  const before = history.length;
+  history = history.filter((e) => e.clientUuid !== clientUuid);
+  if (history.length === before) return;
+  await idb.setHistory(history);
+  emit('state:history-changed');
+  const pending = await idb.listOutbox();
+  for (const item of pending) {
+    if (item.kind === 'history' && item.entry?.clientUuid === clientUuid) {
+      await idb.removeOutbox(item.id);
+    }
+  }
+  await idb.enqueue({ kind: 'history-delete', clientUuid });
+  notifyOutboxChanged();
+  flushOutbox().catch(() => {});
+}
+
+export async function resetUserData() {
+  await request('/api/state/reset', { method: 'POST' });
+  banned = new Map();
+  history = [];
+  await idb.clearState();
+  emit('state:banned-changed');
+  emit('state:history-changed');
+}
+
+export async function clearAllLocalState() {
+  banned = new Map();
+  history = [];
+  await idb.clearAll();
+  emit('state:cleared');
+}
+
+async function flushBanItem(item) {
+  if (item.kind === 'ban') {
+    const resp = await request('/api/bans', { method: 'POST', body: { cardId: item.cardId } });
+    if (resp && resp.bannedAt && banned.has(item.cardId)) {
+      banned.set(item.cardId, resp.bannedAt);
+      await idb.setBanned(bannedToList());
+      emit('state:banned-changed');
+    }
+  } else if (item.kind === 'unban') {
+    await request(`/api/bans/${encodeURIComponent(item.cardId)}`, { method: 'DELETE' });
+  }
+  await idb.removeOutbox(item.id);
+}
+
+async function flushOutbox() {
+  if (flushing) return;
+  if (!navigator.onLine) return;
+  flushing = true;
+  try {
+    const items = await idb.listOutbox();
+    if (!items.length) return;
+    // Split into history (already a single batched POST) and ban/unban (group
+    // by cardId so concurrent groups don't reorder ban+unban on the same card).
+    // History deletes run after the history batch: a delete is always enqueued
+    // after the add it undoes, so adds-then-deletes preserves the final state.
+    const historyBatch = [];
+    const historyDeletes = [];
+    const byCard = new Map();
+    for (const item of items) {
+      if (item.kind === 'history') {
+        historyBatch.push({ item, entry: item.entry });
+      } else if (item.kind === 'history-delete') {
+        historyDeletes.push(item);
+      } else if (item.kind === 'ban' || item.kind === 'unban') {
+        if (!byCard.has(item.cardId)) byCard.set(item.cardId, []);
+        byCard.get(item.cardId).push(item);
+      }
+    }
+    // Each card's chain runs serially; chains across cards run in parallel.
+    // A 401 or transient error on any chain aborts the whole flush so the next
+    // online event retries the remaining items.
+    const groups = [...byCard.values()].map(async (chain) => {
+      for (const item of chain) await flushBanItem(item);
+    });
+    try {
+      await Promise.all(groups);
+    } catch {
+      // A chain failed (401 or transient error); the other chains may have
+      // drained items, so refresh the pending badge before bailing. The next
+      // online event retries the rest.
+      notifyOutboxChanged();
+      return;
+    }
+    if (historyBatch.length > 0) {
+      try {
+        await request('/api/history', {
+          method: 'POST',
+          body: { entries: historyBatch.map((b) => b.entry) },
+        });
+        for (const { item } of historyBatch) {
+          await idb.removeOutbox(item.id);
+        }
+      } catch {
+        // The ban chains above may have drained, so refresh the pending badge,
+        // but don't announce a clean flush while history entries are still
+        // queued. The next online event retries them.
+        notifyOutboxChanged();
+        return;
+      }
+    }
+    for (const item of historyDeletes) {
+      try {
+        await request(`/api/history/${encodeURIComponent(item.clientUuid)}`, { method: 'DELETE' });
+        await idb.removeOutbox(item.id);
+      } catch {
+        notifyOutboxChanged();
+        return;
+      }
+    }
+    emit('sync:flushed');
+    notifyOutboxChanged();
+  } finally {
+    flushing = false;
+  }
+}
+
+export { flushOutbox };

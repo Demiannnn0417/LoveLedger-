@@ -1,0 +1,113 @@
+<!--
+  SPDX-License-Identifier: MIT
+  SPA shell. All screens live in public/views/*.html and are loaded by the
+  router based on the URL hash. Keep inline scripts/styles out of this file
+  so the strict CSP (no 'unsafe-inline') stays compliant.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a0f35">
+  <meta name="description" data-i18n-attr="content:app.name" content="Couplecards">
+  <title>Couplecards</title>
+
+  <link rel="stylesheet" href="/css/fonts.css">
+  <link rel="stylesheet" href="/css/themes.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/cards.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/ledger.css">
+
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="shortcut icon" href="/icons/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Couplecards">
+</head>
+<body>
+  <a href="#main-content" class="skip-link" data-i18n="common.skipToContent">Skip to main content</a>
+  <div id="screen-announce" class="sr-only" role="status" aria-live="polite"></div>
+
+  <div id="boot-skeleton" class="boot-skeleton">
+    <div class="boot-logo"><img class="title-icon" src="/icons/icon.svg" alt="" aria-hidden="true" draggable="false"><span>Couplecards</span></div>
+    <div class="boot-pulse"></div>
+  </div>
+
+  <div id="app" hidden>
+    <div id="demo-banner" class="demo-banner" role="status" aria-live="polite" hidden></div>
+    <main id="main-content" tabindex="-1">
+      <div id="view" class="screen"></div>
+    </main>
+
+    <nav class="app-bottom-nav" data-i18n-attr="aria-label:nav.main">
+      <ul class="app-bottom-nav-list">
+        <li>
+          <a href="#/rules" data-nav-route="rules">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <span data-i18n="rules.title">Rules</span>
+          </a>
+        </li>
+        <li>
+          <a href="#/collection" data-nav-route="collection">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+            <span data-i18n="collection.title">Collection</span>
+          </a>
+        </li>
+        <li>
+          <a href="#/ledger" data-nav-route="ledger">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M16 10h5v4h-5a2 2 0 0 1 0-4z"/><path d="M7.5 9.5c-1.8-1.7-4.5 1-2.2 3.1L7.5 15l2.2-2.4c2.3-2.1-.4-4.8-2.2-3.1z"/></svg>
+            <span data-i18n="ledger.nav">Ledger</span>
+          </a>
+        </li>
+        <li>
+          <a href="#/history" data-nav-route="history">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+            <span data-i18n="history.title">History</span>
+          </a>
+        </li>
+        <li>
+          <a href="#/settings" data-nav-route="settings">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span data-i18n="settings.title">Settings</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <button type="button" id="scroll-to-top" class="scroll-to-top scroll-to-top-above-nav" data-i18n-attr="aria-label:common.scrollTop" aria-label="Back to top">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+    </button>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+      <div class="modal-backdrop" data-modal-close></div>
+      <div class="modal-card">
+        <h3 id="modal-title" class="modal-title"></h3>
+        <div id="modal-body" class="modal-body"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="modal-cancel" data-i18n="common.cancel"></button>
+          <button type="button" class="btn btn-primary" id="modal-confirm" data-i18n="common.confirm"></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="sync-banner" class="sync-banner" role="status" aria-live="polite" hidden>
+      <span class="sync-dot" aria-hidden="true"></span>
+      <span id="sync-banner-text"></span>
+    </div>
+
+    <div id="update-banner" class="update-banner" role="status" hidden>
+      <span data-i18n="common.updateAvailable">A new version is available.</span>
+      <button type="button" class="btn btn-primary" id="update-reload" data-i18n="common.reload">Reload</button>
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

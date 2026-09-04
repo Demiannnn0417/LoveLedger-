@@ -1,0 +1,72 @@
+<!-- SPDX-License-Identifier: MIT -->
+<header class="app-header">
+  <button class="icon-btn" id="btn-back-home" data-i18n-attr="aria-label:common.back" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <h1 class="title" data-i18n="ledger.title">Couple ledger</h1>
+  <button class="icon-btn" id="ledger-refresh" type="button" data-i18n-attr="aria-label:ledger.refresh">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>
+  </button>
+</header>
+
+<div id="ledger-loading" class="empty ledger-loading">
+  <div class="empty-icon" aria-hidden="true">💞</div>
+  <div class="empty-title" data-i18n="ledger.loading">Loading the ledger…</div>
+</div>
+
+<section id="ledger-unbound" class="ledger-onboarding" hidden>
+  <div class="ledger-hero">
+    <div class="ledger-hero-icon" aria-hidden="true">💑</div>
+    <h2 data-i18n="ledger.unbound.title">Bind with your partner</h2>
+    <p data-i18n="ledger.unbound.body">Create a couple and share the invite code, or enter your partner's code.</p>
+  </div>
+  <button class="btn btn-primary ledger-wide-button" id="ledger-create-couple" type="button" data-i18n="ledger.unbound.create">Create our ledger</button>
+  <div class="ledger-or" data-i18n="ledger.unbound.or">or join an existing couple</div>
+  <form id="ledger-join-form" class="ledger-join-form">
+    <label class="field">
+      <span data-i18n="ledger.invite.label">Invite code</span>
+      <input id="ledger-invite-input" type="text" inputmode="text" autocomplete="off" maxlength="8" pattern="[A-Za-z0-9]{8}" data-i18n-attr="placeholder:ledger.invite.placeholder" required>
+    </label>
+    <button class="btn" type="submit" data-i18n="ledger.unbound.join">Bind now</button>
+  </form>
+</section>
+
+<div id="ledger-bound" hidden>
+  <section class="ledger-couple-panel">
+    <div>
+      <div class="ledger-eyebrow" data-i18n="ledger.couple.label">Your couple</div>
+      <h2 id="ledger-couple-name"></h2>
+      <div id="ledger-members" class="ledger-member-chips"></div>
+    </div>
+    <div class="ledger-invite-block" id="ledger-invite-block">
+      <span data-i18n="ledger.invite.share">Send this code to your partner</span>
+      <div class="ledger-code-row">
+        <code id="ledger-invite-code"></code>
+        <button class="btn btn-sm" id="ledger-copy-code" type="button" data-i18n="ledger.invite.copy">Copy</button>
+        <button class="btn btn-sm btn-ghost" id="ledger-rotate-code" type="button" data-i18n="ledger.invite.rotate">Replace</button>
+      </div>
+    </div>
+    <button class="btn btn-sm btn-ghost ledger-leave" id="ledger-leave-couple" type="button" data-i18n="ledger.couple.leave">Dissolve binding</button>
+  </section>
+
+  <section class="ledger-section">
+    <div class="ledger-section-header">
+      <div>
+        <div class="ledger-eyebrow" data-i18n="ledger.items.eyebrow">Shared inventory</div>
+        <h2 data-i18n="ledger.items.title">Balances</h2>
+      </div>
+      <button class="btn btn-sm btn-primary" id="ledger-add-item" type="button" data-i18n="ledger.items.add">Add an item</button>
+    </div>
+    <div id="ledger-items" class="ledger-items"></div>
+  </section>
+
+  <section class="ledger-section">
+    <div class="ledger-section-header">
+      <div>
+        <div class="ledger-eyebrow" data-i18n="ledger.transactions.eyebrow">Every change is recorded</div>
+        <h2 data-i18n="ledger.transactions.title">Activity</h2>
+      </div>
+    </div>
+    <div id="ledger-transactions" class="ledger-transactions"></div>
+  </section>
+</div>

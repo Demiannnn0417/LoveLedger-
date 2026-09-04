@@ -1,0 +1,16 @@
+{
+  "name": "情侣卡片",
+  "short_name": "情侣卡片",
+  "description": "一款可自行部署的情侣活动抽卡应用，为日常生活增添新鲜感。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0820",
+  "theme_color": "#1a0f35",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MIT
+# HTTPS deployment with nginx + certbot (manual certificate management).
+
+services:
+  couplecards:
+    build: ../..
+    image: couplecards:latest
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "1"
+      SEED_LOCALE: ${SEED_LOCALE:-zh}
+      ADMIN_RESET: ${ADMIN_RESET:-0}
+      ENABLE_DEMO_ACCOUNT: ${ENABLE_DEMO_ACCOUNT:-0}
+      ENABLE_REGISTRATION: ${ENABLE_REGISTRATION:-0}
+    volumes:
+      - ../../var:/app/var
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - couplecards

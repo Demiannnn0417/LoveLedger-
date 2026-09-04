@@ -1,0 +1,152 @@
+# Architecture overview
+
+Audience: contributors who want to understand how the pieces fit together before editing anything.
+
+## High-level layout
+
+```text
+couplecards/
+├── server/                       Node.js backend (Fastify 5 and node:sqlite)
+│   ├── src/
+│   │   ├── index.js              bootstrap
+│   │   ├── config.js             environment parsing
+│   │   ├── db/
+│   │   │   ├── index.js          DatabaseSync wrapper and transaction helper
+│   │   │   ├── migrate.js        migration runner
+│   │   │   └── seed.js           first-run seeding
+│   │   ├── plugins/              session, csrf, helmet, ratelimit, static
+│   │   ├── lib/                  password hashing, auth guards, locale list, deck sync helpers
+│   │   └── routes/               auth, cards, ledger, admin-cards, users, sync, manifest, health
+│   └── migrations/               *.sql migration files
+├── public/                       Frontend (plain ES modules, no build step for source)
+│   ├── index.html                SPA shell
+│   ├── login.html                login and forced-change flow
+│   ├── admin.html                admin panel (users, cards, deck maintenance, language toggle)
+│   ├── 404.html, 500.html        localized error pages
+│   ├── views/                    SPA partials loaded by the router
+│   ├── js/
+│   │   ├── app.js, login.js, admin.js       page entry points
+│   │   ├── core/                 api, auth, events, i18n, idb, router, sync
+│   │   ├── features/             home, deck, history, collection, ledger, settings, rules, admin
+│   │   └── ui/                   shell, emoji, password-strength, sound
+│   ├── css/, fonts/, icons/, locales/, vendor/
+│   └── sw.js                     Service Worker
+├── data/
+│   └── cards.<locale>.json       One file per supported locale (zh, en, fr, de, it, es), loaded at first-run seed
+├── scripts/                      build-time helpers (vendor bundle, SPDX retrofit)
+├── deploy/                       reverse proxy presets for Caddy, Traefik, and nginx
+├── docs/                         you are here
+└── docker-compose.yml, Dockerfile
+```
+
+## Request flow
+
+### Authenticated page load
+
+```text
+Browser → GET /                → static plugin serves index.html
+Browser → app.js               → me() calls /api/auth/me
+  if 401                         → redirect to /login.html
+  if mustChangePassword          → redirect to /login.html?forceChange=1
+  if isDemo                      → show the persistent demo banner
+Browser → initI18n() and initSync() run together
+             (GET /locales/<locale>.json, GET /api/cards?locale=<locale>, GET /api/state)
+Browser → router mounts the first route (for example home)
+```
+
+### Mutation while online
+
+```text
+draw.js → sync.banCard(id)
+       → idb.setBanned([...])            optimistic write to IndexedDB
+       → idb.enqueue({kind:'ban', id})   push into the outbox
+       → POST /api/bans                  (retries automatically through the outbox on failure)
+```
+
+### Mutation while offline
+
+```text
+sync.banCard(id) → IndexedDB update → outbox enqueue (flush attempt fails)
+[online event]   → sync.flushOutbox() drains the outbox to the server
+```
+
+## Router
+
+The SPA router lives in `public/js/core/router.js` and is roughly seventy lines of code. A route name maps to a partial HTML file in `public/views/<name>.html` and to a dynamically imported feature module at `public/js/features/<name>/<name>.js`. Each feature module exports a `mount({ params })` function and an optional `unmount()` function. Scroll positions are recorded per route and restored only when the user navigates back through history (browser back, in-app `history.back()`); regular link clicks always land at the top.
+
+## State management
+
+- The deck, the banned set, and the history all live in IndexedDB.
+- The deck is refreshed from `GET /api/cards?locale=<locale>`, which returns an ETag-style `version` token so the client can skip the download when nothing has changed. The server ships one translation per card, the one that locale resolves to, which is about a third of the full multilingual payload. The locale is part of the version token, so picking another language in Settings misses the cached ETag and pulls the deck again; `core/sync.js` then emits `deck:changed` and the card views repaint. That IndexedDB copy is the only offline copy of the deck: the Service Worker passes `/api/*` straight through and never caches it, so an admin edit reaches players on their next launch.
+- The banned set and the history are synchronized through `GET /api/state` and their respective mutation endpoints.
+- Mutations are queued in an IndexedDB `outbox` store and drained every time the page comes back online.
+- Signing out wipes all three stores, so a device shared between accounts never falls back to the previous user's cached data when `GET /api/state` is unreachable.
+- The shared inventory ledger is server-authoritative and is deliberately not queued offline. `GET /api/ledger` returns the caller's couple, both members, active items, derived balances, and the latest 200 immutable transactions. This avoids two offline devices independently spending the same balance.
+
+`public/js/core/sync.js` is the single entry point for state. Feature modules never talk to the API directly. Each card exposes a `translations` object keyed by locale, and the helper `getCardText(card, locale)` picks the right title and description for the current user language with an English fallback. The player app holds a single entry per card, already resolved by the server through that same chain, so the helper's fallback still applies to a deck cached before a language change. The admin panel calls `/api/cards` without a locale and keeps every translation.
+
+## Card draw
+
+`drawRandom(pile, recentIds)` in `public/js/core/sync.js` picks the next card for a pile. It first removes the user's banned cards (`availableCards`), then excludes the most recently drawn ids in that pile (`CONFIG.recentExclude`, three by default) so the same card does not come back two draws in a row. From the remaining pool it does a weighted random pick: standard cards weigh `1.0`, foil cards weigh `FOIL_WEIGHT = 0.3`. The constant lives at the top of `sync.js` and exists to keep the appearance rate of foil cards (the rare, explicitly sexual variant) low even when their share of the deck is non-trivial. With the current FR deck (27 foil out of 146), the effective foil draw rate is around 9.2% on the home pile and 3.9% on the outdoor pile, well below what the raw counts would suggest.
+
+## Collection screen
+
+`public/js/features/collection/collection.js` renders the deck as a grid mirrored on the user's history. A card is "discovered" once it appears in the local history (returned or banned). Drawn tiles open the existing draw screen in preview mode (`#/draw?preview=<cardId>`), where Ban or Restore buttons mutate the banned set without leaving the screen. Banned tiles carry a red cross overlay; undiscovered tiles show a "?" silhouette and ignore clicks. Foil cards wear a subtle static rainbow border regardless of state. The toolbar above the grid pairs the discovered counter with a completion bar and a search field; the search narrows the visible tiles by title and description and matches only already-discovered cards (locked tiles expose no text), while the counter and bar always track the active pile or rarity filter rather than the search. The screen is derived from `getCards()`, `getHistory()`, and `isBanned(id)` from `core/sync.js`, so there is no dedicated backend endpoint. Every filter click, search keystroke, and ban rebuilds the whole grid, which is why tiles open through one delegated handler on the grid rather than a pair of listeners each, and why the card faces carry `content-visibility: auto` so the browser skips the ones scrolled out of view.
+
+## Internationalization
+
+The backend has a single source of truth for supported locales in `server/src/lib/locales.js`. The frontend mirrors this list in `SUPPORTED` inside `public/js/core/i18n.js`.
+
+- User-interface strings live in flat key-to-string JSON files under `public/locales/<locale>.json`.
+- `public/js/core/i18n.js` provides `t`, `tn`, `fmtDate`, `fmtDateLong`, and `applyI18n(root)`.
+- Static HTML uses `data-i18n="key"` and `data-i18n-attr="attr:key,attr2:key2"`.
+- Dynamic JavaScript calls `t(key, params)`.
+- An `i18n:change` event is emitted by `setLocale()`. The i18n module reapplies translations to the DOM on every change, and feature modules listen to it when they cache card text.
+- Card content lives in the database table `card_translations(card_id, locale, title, description)` so the same deck serves every supported language. The seed files under `data/cards.<locale>.json` are merged at first-run seed to populate every translation at once. Structural fields on the `cards` row are language-neutral (`id`, `pile`, `foil`, `emoji`) and must agree across locales; the seed aborts on a mismatch.
+
+The procedure to add a third language is documented end-to-end in [i18n.md](./i18n.md).
+
+## Backend routes
+
+Four guard levels are referenced below: **public** (no auth needed), **session** (any signed-in account), **user** (signed-in non-admin account, used for the player-only state and history endpoints), and **admin**.
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | public | Liveness probe |
+| `GET` | `/api/auth/csrf` | public | Issues a double-submit token |
+| `GET` | `/api/auth/password-policy` | public | Hard rules and zxcvbn thresholds |
+| `POST` | `/api/auth/login` | public | Rate-limited to 5 attempts per minute per IP |
+| `POST` | `/api/auth/register` | public | Self-registration. Gated by the registration setting, rate-limited to 5 per hour per IP, CSRF-exempt like login. Opens a session on success |
+| `GET` | `/api/auth/registration` | public | Whether public registration is open (`{ enabled }`) |
+| `POST` | `/api/auth/logout` | session | |
+| `GET` | `/api/auth/me` | public | Returns 401 when no session |
+| `POST` | `/api/auth/change-password` | session | Rotates `session_epoch` |
+| `POST` | `/api/auth/preferences` | session | Updates the locale. Acknowledged but not persisted for demo accounts |
+| `GET` | `/api/cards` | session | Returns each card with `translations` keyed by locale. `?locale=<locale>` narrows every card to the single entry that locale resolves to and joins the ETag. 304 when unchanged |
+| `POST`, `PATCH`, `DELETE` | `/api/cards[/:id]` | admin | Per-card CRUD. The body carries a `translations` map of `{ locale: { title, description } }` |
+| `GET` | `/api/admin/cards/export` | admin | Downloads a ZIP with one `cards.<locale>.json` per supported locale, pretty-printed |
+| `POST` | `/api/admin/cards/sync` | admin | Reads every `cards.<locale>.json` under `data/` and applies them together (mirror or upsert) |
+| `POST` | `/api/admin/cards/import` | admin | Applies a deck uploaded in the request body (multilingual shape) |
+| `GET` | `/api/state` | user | Returns `{ banned, history }` |
+| `POST` | `/api/state/reset` | user | Wipes the caller's bans and history in a single transaction. Rejected with 403 for demo accounts |
+| `POST`, `DELETE` | `/api/bans[/:cardId]` | user | Idempotent |
+| `POST`, `DELETE` | `/api/history[/:clientUuid]` | user | Batch add and per-entry delete (undo), both idempotent on `clientUuid` |
+| `GET` | `/api/ledger` | user | Returns the caller's couple, member balances, items and latest 200 transactions |
+| `POST`, `DELETE` | `/api/couple` | user | Creates a two-person relationship or dissolves it for both members and deletes its ledger |
+| `POST` | `/api/couple/join` | user | Joins by eight-character invite code; limited to two members and rate-limited per IP |
+| `POST` | `/api/couple/invite/rotate` | user | Replaces the current invite code |
+| `POST`, `PATCH`, `DELETE` | `/api/ledger/items[/:itemId]` | user | Creates, edits, or archives a custom shared item |
+| `POST` | `/api/ledger/transactions` | user | Appends an acquisition/use entry after checking membership and non-negative balance |
+| `GET`, `POST`, `PATCH`, `DELETE` | `/api/admin/users[/:id]` | admin | Full user CRUD plus unlock, reset-password, and bulk removal of inactive accounts (`POST /api/admin/users/prune-inactive`) |
+| `GET`, `PUT` | `/api/admin/registration` | admin | Reads or sets the public-registration switch |
+| `GET` | `/manifest.webmanifest` | public | Negotiated on `Accept-Language` |
+
+## Why vanilla JavaScript and no build step for source
+
+A zero client-side toolchain keeps the contribution barrier low. A text editor and a browser are enough to edit any feature. The only build step is the vendor bundle produced by `scripts/build-vendor.mjs`, which currently packages the zxcvbn core and the fflate library used by the admin deck import dialog. Both are invoked automatically during the Docker build.
+
+## Seeding and upgrades
+
+- On first boot, `seed.js` inserts the default admin account, sets the initial public-registration flag from `ENABLE_REGISTRATION` (the admin switch owns it afterward), and merges every `data/cards.<locale>.json` file into the `cards` and `card_translations` tables.
+- Subsequent starts do nothing when the `users` and `cards` tables are already populated. Cards or translations added later to `data/cards.*.json` are not imported automatically. An admin can apply them through the Deck maintenance screen in the admin panel (see [administration.md](./administration.md)).
+- Database migrations live in `server/migrations/NNN_*.sql`. The runner applies any missing file in lexical order and tracks applied files in the `_migrations` table.

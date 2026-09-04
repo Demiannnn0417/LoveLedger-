@@ -1,0 +1,144 @@
+<!-- SPDX-License-Identifier: MIT -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a0f35">
+  <title>Couplecards - Administration</title>
+  <link rel="stylesheet" href="/css/fonts.css">
+  <link rel="stylesheet" href="/css/themes.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+</head>
+<body>
+  <a href="#admin-panel-users" class="skip-link" data-i18n="common.skipToContent">Skip to main content</a>
+  <div id="screen-announce" class="sr-only" role="status" aria-live="polite"></div>
+  <div id="admin-boot" class="boot-skeleton">
+    <div class="boot-logo"><img class="title-icon" src="/icons/icon.svg" alt="" aria-hidden="true" draggable="false"><span>Couplecards</span></div>
+    <div class="boot-pulse"></div>
+  </div>
+
+  <div id="admin-app" hidden>
+    <header class="admin-header">
+      <h1 id="admin-title" class="title" data-i18n="admin.title">Administration</h1>
+    </header>
+
+    <nav class="admin-tabs" role="tablist">
+      <button type="button" id="admin-tab-users" class="admin-tab" role="tab" aria-selected="true"  tabindex="0"  data-i18n="admin.tabs.users">Users</button>
+      <button type="button" id="admin-tab-cards" class="admin-tab" role="tab" aria-selected="false" tabindex="-1" data-i18n="admin.tabs.cards">Cards</button>
+      <button type="button" id="admin-tab-settings" class="admin-tab admin-tab-right" role="tab" aria-selected="false" tabindex="-1" data-i18n="settings.title">Settings</button>
+    </nav>
+
+    <section id="admin-panel-users" class="admin-panel" role="tabpanel" aria-labelledby="admin-tab-users" tabindex="-1">
+      <form id="admin-create-user-form" class="admin-inline-form">
+        <label for="admin-create-user-input" class="admin-inline-form-label" data-i18n="login.username">Username</label>
+        <div class="admin-inline-form-row">
+          <input type="text" id="admin-create-user-input" required minlength="3" maxlength="32" pattern="[a-z0-9._\-]+">
+          <button type="submit" class="btn btn-success btn-with-icon">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span data-i18n="admin.users.create">Create a user</span>
+          </button>
+        </div>
+        <small class="admin-inline-form-hint" data-i18n="admin.users.create.usernameHint"></small>
+      </form>
+      <div class="admin-inline-form">
+        <div class="admin-registration-row">
+          <span id="admin-registration-label" class="admin-inline-form-label" data-i18n="admin.registration">Public registration</span>
+          <label class="switch">
+            <input type="checkbox" id="admin-registration-toggle" aria-labelledby="admin-registration-label">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <small class="admin-inline-form-hint" data-i18n="admin.registration.hint"></small>
+      </div>
+      <form id="admin-prune-form" class="admin-inline-form">
+        <span class="admin-inline-form-label" data-i18n="admin.users.inactive.title">Inactive accounts</span>
+        <div class="admin-prune-controls">
+          <label class="admin-prune-period-label">
+            <span data-i18n="admin.users.inactive.prefix">Inactive for more than</span>
+            <select id="admin-prune-period" class="setting-select">
+              <option value="3m" data-i18n="admin.users.inactive.period.3m">3 months</option>
+              <option value="6m" data-i18n="admin.users.inactive.period.6m">6 months</option>
+              <option value="1y" data-i18n="admin.users.inactive.period.1y">1 year</option>
+            </select>
+          </label>
+          <button type="submit" class="btn btn-danger" id="admin-prune-submit" data-i18n="admin.users.inactive.delete">Delete inactive accounts</button>
+        </div>
+        <small class="admin-inline-form-hint" data-i18n="admin.users.inactive.hint"></small>
+      </form>
+      <label class="admin-search">
+        <span class="sr-only" data-i18n="admin.users.search">Search users…</span>
+        <input type="search" id="admin-users-search" autocomplete="off"
+               data-i18n-attr="placeholder:admin.users.search">
+      </label>
+      <div id="admin-users-list" class="list"></div>
+    </section>
+
+    <section id="admin-panel-cards" class="admin-panel" role="tabpanel" aria-labelledby="admin-tab-cards" hidden>
+      <div class="deck-tools">
+        <h3 class="deck-tools-title" data-i18n="admin.cards.tools.title">Deck maintenance</h3>
+        <p class="deck-tools-hint" data-i18n="admin.cards.tools.hint"></p>
+        <div class="deck-tools-actions">
+          <div class="deck-tools-row deck-tools-row-primary">
+            <button type="button" class="btn btn-primary" id="admin-deck-sync" data-i18n="admin.cards.tools.syncFromFiles">Sync from the files</button>
+          </div>
+          <div class="deck-tools-row">
+            <button type="button" class="btn btn-sm" id="admin-deck-export" data-i18n="admin.cards.tools.export">Export a backup</button>
+            <button type="button" class="btn btn-sm" id="admin-deck-import" data-i18n="admin.cards.tools.importBackup">Import a backup</button>
+            <button type="button" class="btn btn-sm btn-danger" id="admin-deck-delete-all" data-i18n="admin.cards.tools.deleteAll">Delete all cards</button>
+            <input type="file" id="admin-deck-import-input" accept="application/zip,.zip,application/json,.json" hidden>
+          </div>
+        </div>
+      </div>
+
+      <label class="admin-search">
+        <span class="sr-only" data-i18n="admin.cards.search">Search cards…</span>
+        <input type="search" id="admin-cards-search" autocomplete="off"
+               data-i18n-attr="placeholder:admin.cards.search">
+      </label>
+
+      <button id="admin-create-card-btn" class="btn btn-success btn-with-icon" type="button">
+        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span data-i18n="admin.cards.create">Add a card</span>
+      </button>
+      <div id="admin-cards-list" class="list"></div>
+    </section>
+
+    <section id="admin-panel-settings" class="admin-panel" role="tabpanel" aria-labelledby="admin-tab-settings" hidden>
+      <div class="settings">
+        <div class="setting-row">
+          <span id="admin-language-label" data-i18n="settings.language">Language</span>
+          <select id="admin-language" class="setting-select" aria-labelledby="admin-language-label"></select>
+        </div>
+        <div class="setting-row">
+          <span data-i18n="settings.logout">Log out</span>
+          <button class="btn btn-sm btn-danger" id="admin-logout" type="button" data-i18n="settings.logout.action">Log out</button>
+        </div>
+      </div>
+    </section>
+
+    <button type="button" id="scroll-to-top" class="scroll-to-top" data-i18n-attr="aria-label:common.scrollTop" aria-label="Back to top">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+    </button>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+      <div class="modal-backdrop" data-modal-close></div>
+      <div class="modal-card">
+        <h3 id="modal-title" class="modal-title"></h3>
+        <div id="modal-body" class="modal-body"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="modal-cancel"></button>
+          <button type="button" class="btn btn-primary" id="modal-confirm"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

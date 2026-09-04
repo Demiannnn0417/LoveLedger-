@@ -1,0 +1,90 @@
+<!-- SPDX-License-Identifier: MIT -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a0f35">
+  <title>Couplecards - Sign in</title>
+  <link rel="stylesheet" href="/css/fonts.css">
+  <link rel="stylesheet" href="/css/themes.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="shortcut icon" href="/icons/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+</head>
+<body>
+  <main class="auth-shell">
+    <div class="brand-title">
+      <img class="title-icon" src="/icons/icon.svg" alt="" aria-hidden="true" draggable="false">
+      <span data-i18n="app.name">Couplecards</span>
+    </div>
+    <section class="auth-card" id="step-login" hidden>
+      <h1 class="auth-title" data-i18n="login.title">Sign in</h1>
+      <p class="auth-subtitle" data-i18n="login.subtitle"></p>
+      <form id="login-form" class="auth-form" novalidate>
+        <label class="field">
+          <span data-i18n="login.username">Username</span>
+          <input type="text" id="login-username" name="username"
+                 autocomplete="username" autocapitalize="off" spellcheck="false"
+                 aria-describedby="login-error"
+                 required minlength="3" maxlength="32" pattern="[a-z0-9._\-]+">
+        </label>
+        <label class="field">
+          <span data-i18n="login.password">Password</span>
+          <input type="password" id="login-password" name="password"
+                 autocomplete="current-password"
+                 aria-describedby="login-error"
+                 required>
+        </label>
+        <div class="auth-error" id="login-error" role="alert"></div>
+        <button type="submit" class="btn btn-primary" data-i18n="login.submit">Sign in</button>
+      </form>
+      <p class="auth-alt"><a href="/forgot-password.html" data-i18n="login.forgotLink">Forgot your password?</a></p>
+      <p class="auth-alt" id="login-register" hidden><a href="/register.html" data-i18n="login.registerLink">Create an account</a></p>
+    </section>
+
+    <section class="auth-card" id="step-change" hidden>
+      <h1 class="auth-title" id="change-title" data-i18n="changePassword.title">Change your password</h1>
+      <p class="auth-subtitle" id="change-subtitle"></p>
+      <form id="change-form" class="auth-form" novalidate>
+        <label class="field">
+          <span data-i18n="changePassword.current">Current password</span>
+          <input type="password" id="change-current" autocomplete="current-password"
+                 aria-describedby="change-error" required>
+        </label>
+        <label class="field">
+          <span data-i18n="changePassword.new">New password</span>
+          <input type="password" id="change-new" autocomplete="new-password"
+                 aria-describedby="change-strength change-error"
+                 required minlength="12">
+        </label>
+        <div id="change-strength"></div>
+        <label class="field">
+          <span data-i18n="changePassword.confirm">Confirm new password</span>
+          <input type="password" id="change-confirm" autocomplete="new-password"
+                 aria-describedby="change-error"
+                 required minlength="12">
+        </label>
+        <div class="auth-error" id="change-error" role="alert"></div>
+        <button type="submit" class="btn btn-primary" data-i18n="changePassword.submit">Update my password</button>
+      </form>
+    </section>
+
+    <footer class="auth-footer">
+      <span data-i18n="footer.developedBy">Developed by</span>
+      <a class="auth-footer-link" href="https://qiae.ru" target="_blank" rel="noopener noreferrer">
+        <span class="qiaeru-logo"><img class="auth-footer-logo" src="/icons/qiaeru.svg" alt="Qiaeru" width="22" height="22" draggable="false"></span>
+      </a>
+      <span class="auth-footer-sep" aria-hidden="true">|</span>
+      <span data-i18n="footer.sourceCode">Source code on</span>
+      <a class="auth-footer-link" href="https://github.com/qiaeru/couplecards" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+        <svg class="auth-footer-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+      </a>
+    </footer>
+  </main>
+  <script type="module" src="/js/login.js"></script>
+</body>
+</html>
