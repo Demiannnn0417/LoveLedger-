@@ -1,86 +1,94 @@
-# Couplecards
+# LoveLedger
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/github/v/release/qiaeru/couplecards)](https://github.com/qiaeru/couplecards/releases)
-[![Docker image](https://img.shields.io/badge/ghcr.io-qiaeru%2Fcouplecards-blue)](https://github.com/qiaeru/couplecards/pkgs/container/couplecards)
-[![GitHub stars](https://img.shields.io/github/stars/qiaeru/couplecards?style=social)](https://github.com/qiaeru/couplecards/stargazers)
 
-A self-hosted web app that lets couples draw activity cards, bind two accounts, and keep a shared inventory ledger for rewards such as love cards.
+一款隐私优先、可自行部署的情侣共享 Web 应用。它将情侣日常活动卡与双人库存账本放在一起，可记录爱爱卡、奖励券或任意自定义物品的双方余额及获取/使用流水。
 
-The deck is split into two piles, "Home" and "Outdoor". Each instance has one administrator and as many player accounts as you want. The admin can create accounts directly, or open public registration so anyone can sign up from the login page. In practice a couple often shares a single account.
+> 数据保存在你自己的服务器上；运行时不包含遥测或第三方统计服务。
 
-The activity deck works offline once loaded. The shared ledger requires a connection so both partners always edit the same authoritative balance.
+## 主要功能
 
-> **Self-hosted, your call on sign-ups.** Start it, sign in, then create accounts or open public registration from the admin panel. There is no telemetry and no external network call at runtime.
+- **情侣绑定**：两个普通用户通过八位邀请码建立情侣关系，每个账号只能加入一段关系。
+- **双方独立余额**：同一种物品分别显示两位成员持有的数量。
+- **自定义物品**：支持设置名称、Emoji、计量单位和说明，默认提供“爱爱卡”。
+- **完整流水**：每次获取或使用都会记录操作者、所属成员、数量、备注和时间。
+- **余额保护**：服务端拒绝导致库存变成负数的操作。
+- **日常活动卡**：内置居家和户外卡组，支持抽卡、历史记录和个人禁用列表。
+- **中文界面**：同时支持英语、法语、德语、意大利语和西班牙语。
+- **可安装 PWA**：适配手机、平板和桌面浏览器，可添加到手机主屏幕。
+- **自行部署**：提供 Docker、Caddy、nginx 和 Traefik 部署配置。
 
-## Try the demo
+## 技术栈
 
-A hosted demo is available at **<https://couplecards.qiaeru.com/>**. Sign in with `demo` / `demo`. The demo account's state is wiped on every sign-in, so feel free to click anything.
+- Node.js 24
+- Fastify 5
+- SQLite（Node.js 内置 `node:sqlite`）
+- 原生 HTML、CSS 和 JavaScript ES Modules
+- Docker Compose
 
-| Home | Reveal |
-| :--: | :--: |
-| ![Couplecards home screen with the two piles](./docs/assets/screenshot1.png) | ![A drawn Couplecards card](./docs/assets/screenshot2.png) |
-| *The two piles on the home screen* | *A card revealed from the deck* |
+共享账本以服务器数据为准，必须联网使用，以避免两台设备同时扣减造成余额冲突。活动卡组首次加载后支持离线访问。
 
-## Highlights
-
-### What it does
-
-- **Two piles, one ritual.** The deck splits into a "Home" pile and an "Outdoor" pile. Tap a pile, the top card flips with a foil-shimmer reveal, and a swipe sends it back to the deck or bans it from future draws.
-- **Personal deck memory.** Each player gets their own history, their own ban list, and a low-pile warning when a stack runs thin. Banned cards can be restored with one tap. Drawing a second time from the same pile returns the previous card so the deck stays balanced.
-- **Two-person shared ledger.** Bind two player accounts with a short invite code, track each partner's balance for love cards or any custom item, and keep an acquisition/use trail that records who changed whose balance. Negative balances are rejected server-side.
-- **Accounts your way.** The built-in admin creates accounts for each player, or opens public registration so people sign up themselves from the login page. The admin also manages the shared card library (create, edit, ban, export, import, sync from JSON), sets the activity language, and can sweep away accounts left inactive for months. No third-party identity provider.
-- **Responsive PWA, six languages.** Simplified Chinese, French, English, German, Italian, and Spanish all ship out of the box. Works on phone, tablet, and desktop with a dark theme, a foil-and-glow visual language, full keyboard and screen-reader support, install-to-home-screen on iOS and Android, and offline use after the first load.
-
-### Under the hood
-
-- **Backend.** Node.js 24 and Fastify 5, with SQLite through the built-in `node:sqlite` module. The entire database is a single file on disk (`var/couplecards.db`). Password hashing uses `hash-wasm` (pure WebAssembly), so the server has zero native dependencies and no compilation step.
-- **Authentication.** Argon2id password hashes, session cookies flagged `HttpOnly` and `SameSite=Strict`, CSRF protection, per-route rate limiting, account lockout after repeated failures, and a forced password change on first sign-in for admin-created accounts.
-- **Frontend.** Vanilla ES modules organized into `core`, `features`, and `ui`. No client-side build step is required to edit a feature. Two vendor bundles produced by esbuild during the Docker build (zxcvbn for password strength, fflate for the deck export/import) are the only artifacts that need a build step.
-- **Offline-capable deck.** IndexedDB caches the activity deck, an outbox replays card mutations on reconnect, and a Service Worker precaches the app shell. The shared inventory ledger intentionally stays online-only to avoid conflicting balances.
-- **Internationalized.** Six locales ship out of the box (Simplified Chinese, French, English, German, Italian, and Spanish). Every user-facing string lives in `public/locales/<locale>.json`; Chinese uses the device's native CJK font stack.
-- **Ready for public release.** MIT licensed, no CDN, no analytics, strict CSP, `X-Robots-Tag: noindex`, SPDX headers on every source file, `security.txt`, Dependabot, GitHub Actions CI, and GHCR releases.
-
-## Quick start
+## Docker 快速启动
 
 ```bash
 cp .env.example .env
-# Generate a secret with: openssl rand -base64 48
-# Paste it into .env as SESSION_SECRET
+# 生成随机密钥：openssl rand -base64 48
+# 将结果填写到 .env 的 SESSION_SECRET
 docker compose up -d --build
 ```
 
-Open <http://localhost:3000>. On the first boot:
+启动后访问：
 
-1. Sign in with `couplecards` and the password `changeme`.
-2. Pick a strong admin password when prompted.
-3. From the admin panel, create accounts for the players, or open public registration so they can sign up themselves from the login page. Admin-created accounts show their initial password exactly once; copy it somewhere safe.
+```text
+http://localhost:3000
+```
 
-## Documentation
+首次登录请立即修改管理员密码，然后在管理后台为你和伴侣分别创建普通用户账号。具体初始账号及配置方式请查看部署文档。
 
-- [Deployment guide](./docs/deployment.md) covers environment variables, volumes, backups, emergency reset and the GHCR image.
-- [Admin guide](./docs/administration.md) explains user and card management, the deck maintenance tools, and the role model.
-- [情侣账本使用说明](./docs/ledger.zh-CN.md) explains binding, custom inventory, balances, and transaction history in Chinese.
-- [Configuration reference](./docs/configuration.md) lists every environment variable.
-- [Security model](./docs/security.md) details the threat model and hardening choices.
-- [Architecture](./docs/architecture.md) describes how the backend and frontend fit together.
-- [Internationalization](./docs/i18n.md) walks through adding a new language.
-- [Accessibility](./docs/accessibility.md) tracks the checklist and audit results.
-- [Contributing](./CONTRIBUTING.md) describes the contributor workflow.
-- [Changelog](./CHANGELOG.md) tracks released versions.
+## 情侣账本使用流程
 
-## HTTPS deployments
+1. 第一位用户登录后进入“情侣账本”，点击“创建我们的账本”。
+2. 将生成的八位邀请码发送给伴侣。
+3. 伴侣使用自己的账号登录，在“情侣账本”中输入邀请码。
+4. 绑定后即可查看双方的爱爱卡余额，或创建其他自定义物品。
+5. 点击某位成员旁边的“获取”或“使用”，填写数量和备注即可生成流水。
 
-Three ready-to-use Compose variants live in [`deploy/`](./deploy/):
+解除情侣绑定会同时删除这段关系的共享账本，防止未来的新关系读取旧数据。执行前请确认不再需要历史记录。
 
-- [Caddy](./deploy/caddy/README.md) is the simplest option, with automatic Let's Encrypt certificates.
-- [Traefik](./deploy/traefik/README.md) uses label-based routing and fits well alongside other services.
-- [nginx](./deploy/nginx/README.md) is for hosts that already run nginx with their own certbot pipeline.
+## 云部署
 
-## Credits
+推荐使用项目自带的 Caddy 配置，它会为域名自动申请和续期 HTTPS 证书：
 
-Every third-party asset ships locally under a permissive open-source license. The project uses the Inter and Fraunces fonts (SIL OFL 1.1), the Fluent UI Emoji icon set (MIT), Fastify, hash-wasm, zxcvbn-ts and esbuild. See [CREDITS.md](./CREDITS.md) for the full attribution list.
+```bash
+docker compose -f deploy/caddy/docker-compose.caddy.yml up -d --build
+```
 
-## License
+部署前需要在 `.env` 中设置：
 
-Released under the MIT License. See [LICENSE](./LICENSE) for the full text.
+```dotenv
+SESSION_SECRET=随机生成的高强度密钥
+CADDY_DOMAIN=你的域名
+SEED_LOCALE=zh
+ENABLE_DEMO_ACCOUNT=0
+ENABLE_REGISTRATION=0
+```
+
+不要将 `.env` 或运行时数据库提交到 Git 仓库。
+
+## 文档
+
+- [中文云部署指南](./docs/deployment.zh-CN.md)
+- [情侣账本使用说明](./docs/ledger.zh-CN.md)
+- [配置参考](./docs/configuration.md)
+- [管理指南](./docs/administration.md)
+- [安全模型](./docs/security.md)
+- [系统架构](./docs/architecture.md)
+- [国际化说明](./docs/i18n.md)
+
+## 项目来源
+
+LoveLedger 基于 [couplecards](https://github.com/qiaeru/couplecards) 开源项目改进，新增中文本地化、情侣绑定、共享库存、双方余额以及获取/使用流水等功能。原项目及第三方资源的版权和许可信息见 [LICENSE](./LICENSE) 与 [CREDITS.md](./CREDITS.md)。
+
+## 许可证
+
+本项目依照 [MIT License](./LICENSE) 发布。分发或修改源码时，请保留许可证文件中的原版权与许可声明。
